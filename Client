@@ -1,0 +1,131 @@
+import java.util.*;
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.net.InetSocketAddress;
+import java.nio.channels.SocketChannel;
+import java.nio.ByteBuffer;
+
+public class Client {
+    public static void main(String[] args) throws IOException, InterruptedException {
+        //默认主机和端口号
+        String host = "localhost";
+        int port = 1234;
+
+        //自定义主机和端口号
+        Scanner reader = new Scanner(System.in);
+        System.out.print("ip地址(默认localhost)：");
+        String tempHost = reader.nextLine();
+        if (tempHost.length() != 0) host = tempHost;
+
+        System.out.print("端口(默认1234)：");
+        String tempPortString = reader.nextLine();
+
+        int tempPort = 0;
+        if (tempPortString.length() != 0) {
+            tempPort = Integer.valueOf(tempPortString);
+        }
+        if (tempPort <= 65535 && tempPort >= 1024) port = tempPort;
+
+
+        //建立链接
+        SocketChannel client = SocketChannel.open(new InetSocketAddress(host, port));
+        client.configureBlocking(false);
+        while (!client.finishConnect()) {
+            System.out.println("连接中。。。");
+            Thread.sleep(100);
+            System.out.println("\r");
+        }
+
+
+        System.out.println("连接成功！(输入exit结束聊天)");
+
+
+        String temp = client.getRemoteAddress().toString();
+        String IP = temp.substring(temp.indexOf('/') + 1, temp.indexOf(':'));
+        new ClientReadHandlerThread(client, IP);
+        new ClientWriteHandlerThread(client, IP);
+    }
+}
+
+class ClientReadHandlerThread extends Thread {
+    private SocketChannel server;
+    private ByteBuffer buffer = ByteBuffer.allocateDirect(100);
+    private String header;
+
+    public ClientReadHandlerThread(SocketChannel server, String IP) {
+        this.server = server;
+        header = IP;
+        start();
+    }
+
+
+    public void run() {
+        try {
+            while (true) {
+                buffer.clear();
+                while (server.read(buffer) <= 0) ;
+
+                buffer.flip();
+                printMeg(buffer);
+            }
+        } catch (IOException e) {
+            System.out.println(header + " 连接断开！");
+        } finally {
+            if (server.isConnected()) {
+                try {
+                    server.close();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+        }
+    }
+
+    private void printMeg(ByteBuffer buffer) {
+        System.out.print("\n--------------------\n" + header + ":");
+        while (buffer.hasRemaining())
+            System.out.print(buffer.getChar());
+        System.out.println("\n--------------------");
+    }
+}
+
+class ClientWriteHandlerThread extends Thread {
+    private SocketChannel server;
+    private String header;
+    private ByteBuffer buffer = ByteBuffer.allocateDirect(100);
+    private BufferedReader in = new BufferedReader(new InputStreamReader(System.in));
+
+    public ClientWriteHandlerThread(SocketChannel server, String IP) {
+        this.server = server;
+        header = IP;
+        start();
+    }
+
+    public void run() {
+        try {
+            while (true) {
+                System.out.print("请输入：");
+                String meg = in.readLine();
+                if (!server.isConnected()) break;
+                if (meg.equals("exit")) break;
+
+                buffer.clear();
+                for (int i = 0; i < meg.length(); i++)
+                    buffer.putChar(meg.charAt(i));
+                buffer.flip();
+                while (buffer.hasRemaining())
+                    server.write(buffer);
+            }
+        } catch (IOException e) {
+            System.out.println(header + " 连接断开！");
+        } finally {
+            try {
+                if (server.isConnected())
+                    server.close();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+}
