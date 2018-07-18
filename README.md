@@ -1,2 +1,3 @@
 # MyChatProgram
-一个非阻塞的聊天程序
+一个NIO实现的非阻塞模式的聊天程序
+使用了SocketChannel和ServerSocketChannle以及ByteBuffer类
